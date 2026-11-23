@@ -1,0 +1,93 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Download Inno Setup
+        run: |
+          $url = "https://jrsoftware.org/download.php/is.exe"
+          $output = "C:\is.exe"
+          Invoke-WebRequest -Uri $url -OutFile $output
+          & $output /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="C:\Program Files (x86)\Inno Setup 6"
+          echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build executable with PyInstaller
+        working-directory: ./build
+        run: |
+          pyinstaller drive_backup_app.spec --clean --noconfirm
+
+      - name: Verify executable
+        working-directory: ./build
+        run: |
+          if (Test-Path "dist\DriveBackupManager\DriveBackupManager.exe") {
+            Write-Host "✓ Executable found"
+            $size = (Get-Item "dist\DriveBackupManager\DriveBackupManager.exe").Length / 1MB
+            Write-Host "Size: $([math]::Round($size, 1)) MB"
+          } else {
+            Write-Error "Executable not found!"
+            exit 1
+          }
+
+      - name: Build installer with Inno Setup
+        working-directory: ./build
+        run: |
+          $issc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $issc DriveBackupManager.iss
+
+      - name: Verify installer
+        working-directory: ./build
+        run: |
+          $installer = "dist\DriveBackupManager_Setup_1.0.0.exe"
+          if (Test-Path $installer) {
+            Write-Host "✓ Installer found"
+            $size = (Get-Item $installer).Length / 1MB
+            Write-Host "Size: $([math]::Round($size, 1)) MB"
+          } else {
+            Write-Error "Installer not found!"
+            exit 1
+          }
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DriveBackupManager-Installer
+          path: build/dist/DriveBackupManager_Setup_1.0.0.exe
+          retention-days: 30
+
+      - name: Create Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/dist/DriveBackupManager_Setup_1.0.0.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
