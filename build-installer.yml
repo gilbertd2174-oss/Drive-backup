@@ -27,8 +27,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          # Explicitly disable caching to avoid looking for requirements.txt
-          cache: ''
 
       - name: Install PyInstaller
         run: pip install pyinstaller
@@ -51,8 +49,6 @@ jobs:
         run: |
           if (Test-Path "dist\DriveBackupManager\DriveBackupManager.exe") {
             Write-Host "✓ Executable found"
-            $size = (Get-Item "dist\DriveBackupManager\DriveBackupManager.exe").Length / 1MB
-            Write-Host "Size: $([math]::Round($size, 1)) MB"
           } else {
             Write-Error "Executable not found!"
             exit 1
@@ -70,8 +66,6 @@ jobs:
           $installer = "dist\DriveBackupManager_Setup_1.0.0.exe"
           if (Test-Path $installer) {
             Write-Host "✓ Installer found"
-            $size = (Get-Item $installer).Length / 1MB
-            Write-Host "Size: $([math]::Round($size, 1)) MB"
           } else {
             Write-Error "Installer not found!"
             exit 1
